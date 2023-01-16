@@ -1,10 +1,14 @@
 const express = require("express");
 const body_parser = require("body-parser");
 const path = require("path");
+const WebSocket = require('ws');  
 
 const Notes = require("./database");
 const updateRouter = require("./update-router");
 const app = express();
+
+const server = app.listen(3005);
+const wss = new WebSocket.Server({ server });
 
 app.set("view engine", "pug");
 app.set("views", path.join(__dirname, "views"));
@@ -85,6 +89,36 @@ app.post("/updatepage", (req, res, next) => {
   res.redirect("/index");
   return next();
 });
+
+wss.on('connection', (ws) => {
+  console.log('Nuevo cliente conectado');
+
+  ws.on('message', (message) => {
+    console.log(`Mensaje recibido: ${message}`);
+    const messageData = JSON.parse(message);
+
+  if (messageData.type === 'create_note') {
+    const Note = new Notes({});
+    Note.title = messageData.title;
+    Note.description = messageData.description;
+    Note.save((err, product) => {
+      if (err) console.log(err);
+      console.log(product);
+    });
+
+    ws.send(JSON.stringify({ type: 'create_note_success', id: Note._id }));
+  }
+  else if (messageData.type === 'get_note') {
+    Notes.findById(messageData.id, (err, document) => {
+      if (err) console.log(err);
+      ws.send(JSON.stringify({ type: 'get_note_success', note: document }));
+    });
+  }
+    ws.send(`Mensaje recibido: ${message}`);
+  });
+});
+
+console.log('Servidor corriendo en el puerto 3005');
 
 const port = process.env.PORT || 3000;
 app.listen(port, (arg) => {
